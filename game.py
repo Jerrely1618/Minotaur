@@ -1,6 +1,6 @@
 import pygame
-from Enviroment import screenHeight,screenWidth
-from Entities import labyrinth
+from Enviroment import labyrinth
+from Entities import screenHeight,screenWidth
 
 pygame.init()
 class MinotaurGame:
@@ -8,7 +8,6 @@ class MinotaurGame:
         self.screen = pygame.display.set_mode((w,h),vsync=1)
         pygame.display.set_caption('MinotaurAI')
         pygame.display.set_icon(pygame.image.load('img/minotaurLogo.png'))
-        self.playing()
         
     def playing(self) -> None:
         environment = labyrinth(self.screen)
@@ -20,4 +19,6 @@ class MinotaurGame:
             environment.run()
             pygame.display.update()
 
-game = MinotaurGame(screenHeight,screenWidth)
+if __name__ == "__main__":
+    game = MinotaurGame(screenHeight,screenWidth)
+    game.playing()

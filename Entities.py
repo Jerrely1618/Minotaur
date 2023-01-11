@@ -1,86 +1,28 @@
 import pygame
-from Enviroment import wall,wallSize,Layout,detectionLine,endPoint
-from math import dist
+from math import dist,sin,cos,pi
 import numpy as np
+        
+DETECTION_POINTS = 4
+# Detection points (4): Left,Right,Up and Down distance to closest wall
+# Self coordinates (2): X and Y
+# Opossite coordinates(2): X and Y
+TOTAL_INPUTS = DETECTION_POINTS + 4
 
-input_layer = np.zeros(11)
-class labyrinth:
-    def __init__(self,surface):
-        self.display_surface = surface
-        self.walls = pygame.sprite.Group()
-        self.enemies = pygame.sprite.GroupSingle()
-        self.friends = pygame.sprite.GroupSingle()
-        self.finishs = pygame.sprite.GroupSingle()
-        
-        for i,row in enumerate(Layout):
-            for j,tile in enumerate(row):
-                x = j * wallSize
-                y = i * wallSize
-                if tile == 'X':
-                    side = wall((x,y),wallSize)
-                    self.walls.add(side)
-                if tile == 'M':
-                    enemy = Minotaur((x,y+5))
-                    self.enemies.add(enemy)
-                if tile == 'H':
-                    for hero in range(1):
-                        friend = Hero((x,(y+5)))
-                        self.friends.add(friend)
-                if tile == 'E':
-                    finish = endPoint((x,y),wallSize)
-                    self.finishs.add(finish)
-                    
-    def minotaur_collisions(self):
-        minotaur = self.enemies.sprite
-        finish = self.finishs.sprite
-        minotaur.rect.x += minotaur.direction.x
-        
-        for block in self.walls.sprites():
-            if block.rect.colliderect(minotaur.rect):
-                if minotaur.direction.x > 0:
-                    minotaur.rect.right = block.rect.left
-                elif minotaur.direction.x < 0:
-                    minotaur.rect.left = block.rect.right
-                elif minotaur.direction.y > 0:
-                    minotaur.rect.bottom = block.rect.top
-                elif minotaur.direction.y < 0:
-                    minotaur.rect.top = block.rect.bottom
-        
-    def hero_collisions(self):
-        finish = self.finishs.sprite
-        for hero in self.friends.sprites():
-            hero.rect.x += hero.direction.x
-            for block in self.walls.sprites():
-                if block.rect.colliderect(hero.rect):
-                    hero.Collided = True
-                    if hero.direction.x > 0:
-                        hero.rect.right = block.rect.left
-                    elif hero.direction.x < 0:
-                        hero.rect.left = block.rect.right
-                    elif hero.direction.y > 0:
-                        hero.rect.bottom = block.rect.top
-                    elif hero.direction.y < 0:
-                        hero.rect.top = block.rect.bottom
-                for i,line in enumerate(hero.lines):
-                    if block.rect.clipline(line.pos,line.end):
-                        pygame.draw.circle(self.display_surface,'red',line.end,10)
-                    
-    def run(self):
-        self.walls.draw(self.display_surface)
-        
-        self.enemies.update()
-        self.friends.update(self.finishs.sprite)
-        self.minotaur_collisions()
-        self.hero_collisions()
-        self.enemies.draw(self.display_surface)
-        self.friends.draw(self.display_surface)
-        
 class Minotaur(pygame.sprite.Sprite):
     def __init__(self,pos) -> None:
+
+        #Loading the sprite
         super().__init__()
         self.image = pygame.image.load('img/Mino.png')
         self.rect = self.image.get_rect(topleft = pos)
         self.direction = pygame.math.Vector2(0,0)
+        
+        #Input parameters
+        self.pos = pos
+        self.lines = []
+        for i in range(DETECTION_POINTS):
+            line = detectionLine(center=-10)
+            self.lines.append(line)
         
     def movement(self): #for user mode
         keys = pygame.key.get_pressed()
@@ -104,18 +46,44 @@ class Minotaur(pygame.sprite.Sprite):
         self.movement()
         self.rect.x += self.direction.x
         self.rect.y += self.direction.y
+
+    def get_inputs(self,surface):
+        inputs = np.zeros(TOTAL_INPUTS)
+
+        #Position input
+        self.pos = (self.rect.x,self.rect.y)
+        inputs[0] = self.pos[0]
+        inputs[1] = self.pos[1]
+
+        #Surrounding inputs
+        n = 2
+        for i,line in enumerate(self.lines):
+                linePos = (self.pos[0]-line.centerAdjust,self.pos[1]-line.centerAdjust)
+                for depth in range(max(screenHeight,screenWidth)):
+                    x = -((depth*cos((pi/2)*i))-linePos[0])
+                    y = -((depth*sin((pi/2)*i))-linePos[1])
+                    pxArray = pygame.PixelArray(surface)
+                    if pxArray[int(x),int(y)] == 12500670:
+                        line.update(linePos,(x,y),depth)
+                        inputs[n] = depth
+                        n += 1
+                        break
         
 class Hero(pygame.sprite.Sprite):
     def __init__(self,pos) -> None:
+        
+        #Loading the sprite
         super().__init__()
         self.image = pygame.image.load('img/Hero.png')
         self.rect = self.image.get_rect(topleft = pos)
         self.direction = pygame.math.Vector2(0,0)
-        self.reward = 0
         self.Collided = False
-        
+
+        #Input parameters
+        self.reward = 0
+        self.pos = pos
         self.lines = []
-        for i in range(11):
+        for i in range(DETECTION_POINTS):
             line = detectionLine(center=-10)
             self.lines.append(line)
         
@@ -137,16 +105,77 @@ class Hero(pygame.sprite.Sprite):
             self.direction.x = 0
             self.direction.y = 0
 
-    def update(self,finish):
+    def update(self) -> np.array:
         self.movement()
         self.rect.x += self.direction.x
         self.rect.y += self.direction.y
-        pos = (self.rect.x,self.rect.y)
+
+    def get_inputs(self,surface,finish_line):
+        inputs = np.zeros(TOTAL_INPUTS + 1) #Additional reward input (Distance to the finish line)
+
+        #Position input
+        self.pos = (self.rect.x,self.rect.y)
+        inputs[0] = self.pos[0]
+        inputs[1] = self.pos[1]
+
+        #Surrounding inputs
+        n = 2
         for i,line in enumerate(self.lines):
-            linePos = (pos[0]-line.centerAdjust,pos[1]-line.centerAdjust)
-            line.calculate_end(i,len(self.lines)-1)
-            line.update(linePos,line.end,line.length)
-        # if self.Collided == False:
-        self.reward = dist([pos[0],pos[1]],[finish.rect.x,finish.rect.y])
-        # else:
-        #     self.reward = 0
+
+                linePos = (self.pos[0]-line.centerAdjust,self.pos[1]-line.centerAdjust)
+                for depth in range(max(screenHeight,screenWidth)):
+                    x = -((depth*cos((2*pi/DETECTION_POINTS)*i))-linePos[0])
+                    y = -((depth*sin((2*pi/DETECTION_POINTS)*i))-linePos[1])
+                    pxArray = pygame.PixelArray(surface)
+                    if pxArray[int(x),int(y)] == 12500670:
+                        line.update(linePos,(x,y),depth)
+                        inputs[n] = depth
+                        n += 1
+                        break
+        
+        #Reward input
+        if self.Collided == False:
+            self.reward = dist([self.pos[0],self.pos[1]],[finish_line.rect.x,finish_line.rect.y])
+        else:
+            self.reward = 0
+        inputs[n] = int(self.reward)
+
+        print(inputs)
+
+class detectionLine():
+    def __init__(self,center) -> None:
+        self.pos = (0,0)
+        self.length = 0
+        self.end = (0,0)
+        self.centerAdjust = center
+        
+    def update(self,pos,end,length):
+        self.pos = pos
+        self.length = length
+        self.end = end
+
+Layout = [
+"XXXXXXXXXXXXXXXXXXXX",
+"X                  X",
+"X H                X",
+"X                  X",
+"XXXXX   X   X   X  X",
+"X       X   X   X  X",
+"X       X   X   X  X",
+"X   XXXXX   XXXXXXXX",
+"X   X          X   X",
+"X   X          X   X",
+"X   X          X   X",
+"X   X   X  X   X   X",
+"X   X   X  X       X",
+"X   X   X  X       X",
+"X   X   X  X       X",
+"X   XXXXX  X   X   X",
+"X   X      X   X   X",
+"X   X      X   X   X",
+"X   XM     X   X  EX",
+"XXXXXXXXXXXXXXXXXXXX"
+]
+wallSize = 30
+screenHeight = len(Layout) * wallSize
+screenWidth = len(Layout[0]) * wallSize
