@@ -1,14 +1,21 @@
 import pygame
 from Entities import Minotaur,Hero,wallSize,Layout
 import numpy as np
+from tf_agents.environments import py_environment
+from tf_agents.trajectories import time_step as ts
+from tf_agents.specs import array_spec
+from Entities import TOTAL_INPUTS 
+from tf_agents.environments import py_environment
 
-class labyrinth:
+class labyrinth(py_environment.PyEnvironment):
     def __init__(self,surface):
         self.display_surface = surface
         self.walls = pygame.sprite.Group()
         self.enemies = pygame.sprite.GroupSingle()
         self.friends = pygame.sprite.GroupSingle()
         self.finishs = pygame.sprite.GroupSingle()
+        self.current_time_step = None
+        self._episode_ended = False
         
         for i,row in enumerate(Layout):
             for j,tile in enumerate(row):
@@ -27,7 +34,38 @@ class labyrinth:
                 if tile == 'E':
                     finish = endPoint((x,y),wallSize)
                     self.finishs.add(finish)
-                    
+    def observation_spec(self):
+        # Define the observation space
+        return array_spec.BoundedArraySpec(shape=(TOTAL_INPUTS,), dtype=np.float32, minimum=0, name='observation')
+
+    def action_spec(self):
+        return array_spec.BoundedArraySpec(shape=(), dtype=np.int32, minimum=0, maximum=3, name='action')
+
+    def _reset(self):
+        self.current_time_step = None
+        self._episode_ended = False
+        self.friends.sprite.reset()
+        self.start_time = pygame.time.get_ticks()
+        return ts.restart(np.array(self._get_observation(), dtype=np.float32))
+
+    def _step(self, action):
+        if self._episode_ended:
+            return self.reset()
+        self.friends.sprite.movement(action)
+        self.friends.sprite.update()
+        current_time = pygame.time.get_ticks()
+        elapsed_time = current_time - self.start_time
+        if elapsed_time >= 60000:
+            self._episode_ended = True
+            return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward=0.0)
+        else:
+            return ts.transition(np.array(self._get_observation(), dtype=np.float32), reward=1.0, discount=1.0)
+
+    def _get_observation(self):
+        hero_inputs = self.friends.sprite.get_inputs(self.display_surface, self.finishs.sprite)
+        # minotaur_inputs = self.enemies.sprite.get_inputs(self.display_surface)
+        return np.array(hero_inputs)
+    
     def minotaur_collisions(self):
         minotaur = self.enemies.sprite
         finish = self.finishs.sprite
@@ -44,8 +82,8 @@ class labyrinth:
                 elif minotaur.direction.y < 0:
                     minotaur.rect.top = block.rect.bottom
                     
-        for line in minotaur.lines:
-            pygame.draw.line(self.display_surface,'black',line.pos,line.end,1)
+        # for line in minotaur.lines:
+        #     pygame.draw.line(self.display_surface,'black',line.pos,line.end,1)
         
     def hero_collisions(self):
         finish = self.finishs.sprite
@@ -62,9 +100,16 @@ class labyrinth:
                         hero.rect.bottom = block.rect.top
                     elif hero.direction.y < 0:
                         hero.rect.top = block.rect.bottom
-            for line in hero.lines:
-                pygame.draw.line(self.display_surface,'black',line.pos,line.end,1)
-                    
+            # for line in hero.lines:
+            #     pygame.draw.line(self.display_surface,'black',line.pos,line.end,1)
+    def render(self, mode='rgb_array'):
+        if mode != 'rgb_array':
+            raise NotImplementedError('Only "rgb_array" mode is supported.')
+        self.display_surface.fill((253, 245, 230))
+        self.run()
+        pygame.display.flip()
+        return pygame.surfarray.array3d(self.display_surface)
+    
     def run(self):
         self.walls.draw(self.display_surface)
         self.enemies.update()

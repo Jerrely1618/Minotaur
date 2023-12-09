@@ -19,6 +19,7 @@ class Minotaur(pygame.sprite.Sprite):
         
         #Input parameters
         self.pos = pos
+        self.initial_pos = pos
         self.lines = []
         for i in range(DETECTION_POINTS):
             line = detectionLine(center=-10)
@@ -55,20 +56,29 @@ class Minotaur(pygame.sprite.Sprite):
         inputs[0] = self.pos[0]
         inputs[1] = self.pos[1]
 
-        #Surrounding inputs
         n = 2
-        for i,line in enumerate(self.lines):
-                linePos = (self.pos[0]-line.centerAdjust,self.pos[1]-line.centerAdjust)
-                for depth in range(max(screenHeight,screenWidth)):
-                    x = -((depth*cos((pi/2)*i))-linePos[0])
-                    y = -((depth*sin((pi/2)*i))-linePos[1])
-                    pxArray = pygame.PixelArray(surface)
-                    if pxArray[int(x),int(y)] == 12500670:
-                        line.update(linePos,(x,y),depth)
+        TARGET_COLOR = 12500670
+
+        for i, line in enumerate(self.lines):
+            linePos = (self.pos[0] - line.centerAdjust, self.pos[1] - line.centerAdjust)
+            cos_val = cos((pi / 2) * i)
+            sin_val = sin((pi / 2) * i)
+
+            for depth in range(max(screenHeight, screenWidth)):
+                x = -((depth * cos_val) - linePos[0])
+                y = -((depth * sin_val) - linePos[1])
+                pxArray = pygame.PixelArray(surface)
+                x_index, y_index = int(x), int(y)
+
+                if 0 <= x_index < surface.get_width() and 0 <= y_index < surface.get_height():
+                    if pxArray[x_index, y_index] == TARGET_COLOR:
+                        line.update(linePos, (x, y), depth)
                         inputs[n] = depth
                         n += 1
                         break
-        
+        del pxArray
+        return inputs
+    
 class Hero(pygame.sprite.Sprite):
     def __init__(self,pos) -> None:
         
@@ -82,36 +92,39 @@ class Hero(pygame.sprite.Sprite):
         #Input parameters
         self.reward = 0
         self.pos = pos
+        self.initial_pos = pos
         self.lines = []
         for i in range(DETECTION_POINTS):
             line = detectionLine(center=-10)
             self.lines.append(line)
+    def reset(self):
+        self.rect.topleft = self.initial_pos
+        self.direction = pygame.math.Vector2(0, 0)
+        self.Collided = False
         
-    def movement(self): #for user mode
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_d]:
+    def movement(self, action):
+        if action == 0:
             self.direction.x = 1
             self.direction.y = 0
-        elif keys[pygame.K_a]:
+        elif action == 1:
             self.direction.x = -1
             self.direction.y = 0
-        elif keys[pygame.K_w]:
+        elif action == 2:
             self.direction.y = -1
             self.direction.x = 0
-        elif keys[pygame.K_s]:
+        elif action == 3:
             self.direction.y = 1
             self.direction.x = 0
-        else: 
+        else:
             self.direction.x = 0
             self.direction.y = 0
 
     def update(self) -> np.array:
-        self.movement()
         self.rect.x += self.direction.x
         self.rect.y += self.direction.y
 
     def get_inputs(self,surface,finish_line):
-        inputs = np.zeros(TOTAL_INPUTS + 1) #Additional reward input (Distance to the finish line)
+        inputs = np.zeros(TOTAL_INPUTS)
 
         #Position input
         self.pos = (self.rect.x,self.rect.y)
@@ -120,27 +133,30 @@ class Hero(pygame.sprite.Sprite):
 
         #Surrounding inputs
         n = 2
-        for i,line in enumerate(self.lines):
+        TARGET_COLOR = 12500670
 
-                linePos = (self.pos[0]-line.centerAdjust,self.pos[1]-line.centerAdjust)
-                for depth in range(max(screenHeight,screenWidth)):
-                    x = -((depth*cos((2*pi/DETECTION_POINTS)*i))-linePos[0])
-                    y = -((depth*sin((2*pi/DETECTION_POINTS)*i))-linePos[1])
-                    pxArray = pygame.PixelArray(surface)
-                    if pxArray[int(x),int(y)] == 12500670:
-                        line.update(linePos,(x,y),depth)
+        for i, line in enumerate(self.lines):
+            linePos = (self.pos[0] - line.centerAdjust, self.pos[1] - line.centerAdjust)
+            cos_val = cos((pi / 2) * i)
+            sin_val = sin((pi / 2) * i)
+
+            for depth in range(max(screenHeight, screenWidth)):
+                x = -((depth * cos_val) - linePos[0])
+                y = -((depth * sin_val) - linePos[1])
+                
+                # Create PixelArray outside the loop
+                pxArray = pygame.PixelArray(surface)
+
+                # Cast coordinates to integers for pixel indices
+                x_index, y_index = int(x), int(y)
+
+                if 0 <= x_index < surface.get_width() and 0 <= y_index < surface.get_height():
+                    if pxArray[x_index, y_index] == TARGET_COLOR:
+                        line.update(linePos, (x, y), depth)
                         inputs[n] = depth
                         n += 1
                         break
-        
-        #Reward input
-        if self.Collided == False:
-            self.reward = dist([self.pos[0],self.pos[1]],[finish_line.rect.x,finish_line.rect.y])
-        else:
-            self.reward = 0
-        inputs[n] = int(self.reward)
-
-        print(inputs)
+        return inputs
 
 class detectionLine():
     def __init__(self,center) -> None:
