@@ -1,11 +1,12 @@
 import pygame
-from Entities import Minotaur,Hero,wallSize,Layout
+from Entities import Minotaur,Hero,wallSize,Layout,screenHeight,screenWidth
 import numpy as np
 from tf_agents.environments import py_environment
 from tf_agents.trajectories import time_step as ts
 from tf_agents.specs import array_spec
 from Entities import TOTAL_INPUTS 
 from tf_agents.environments import py_environment
+
 
 class labyrinth(py_environment.PyEnvironment):
     def __init__(self,surface):
@@ -14,8 +15,10 @@ class labyrinth(py_environment.PyEnvironment):
         self.enemies = pygame.sprite.GroupSingle()
         self.friends = pygame.sprite.GroupSingle()
         self.finishs = pygame.sprite.GroupSingle()
+        self.start_time = pygame.time.get_ticks()
         self.current_time_step = None
         self._episode_ended = False
+        
         
         for i,row in enumerate(Layout):
             for j,tile in enumerate(row):
@@ -50,31 +53,26 @@ class labyrinth(py_environment.PyEnvironment):
     def _step(self, action):
         if self._episode_ended:
             return self._reset()
-
+        font = pygame.font.SysFont(None, 25)
         self.friends.sprite.movement(action)
         self.friends.sprite.update()
 
-        collision_reward = 0.0
-        for block in self.walls.sprites():
-            if block.rect.colliderect(self.friends.sprite.rect):
-                collision_reward = -0.1
-                break
-
-        if self.friends.sprite.rect.colliderect(self.finishs.sprite.rect):
-            reward = 1.0
-            self._episode_ended = True
-            return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward)
-
+        hero_position = np.array([self.friends.sprite.rect.x, self.friends.sprite.rect.y])
+        finish_position = np.array([self.finishs.sprite.rect.x, self.finishs.sprite.rect.y])
+        distance_to_finish = np.linalg.norm(hero_position - finish_position)
+        distance_reward = 1.0 - distance_to_finish / max(screenHeight, screenWidth)
+        reward = distance_reward
+        
         current_time = pygame.time.get_ticks()
         elapsed_time = current_time - self.start_time
-        print(f"Elapsed Time: {elapsed_time}")
 
-        if elapsed_time >= 100:
+        if elapsed_time >= 10000:
             self._episode_ended = True
             reward = -0.5
             return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward)
-
-        reward = collision_reward
+        timer_text = font.render(f'Timer: {elapsed_time / 1000:.2f}s', True, (0, 0, 0))
+        self.display_surface.blit(timer_text, (10, 70))
+        pygame.display.update()
         return ts.transition(np.array(self._get_observation(), dtype=np.float32), reward, discount=1.0)
 
 

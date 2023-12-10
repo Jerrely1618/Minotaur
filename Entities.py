@@ -6,6 +6,7 @@ DETECTION_POINTS = 4
 # Detection points (4): Left,Right,Up and Down distance to closest wall
 # Self coordinates (2): X and Y
 # Opossite coordinates(2): X and Y
+# Distance from the finish line in X vector and Y vector(2)
 TOTAL_INPUTS = DETECTION_POINTS + 4
 
 class Minotaur(pygame.sprite.Sprite):
@@ -58,7 +59,6 @@ class Minotaur(pygame.sprite.Sprite):
 
         n = 2
         TARGET_COLOR = 12500670
-
         for i, line in enumerate(self.lines):
             linePos = (self.pos[0] - line.centerAdjust, self.pos[1] - line.centerAdjust)
             cos_val = cos((pi / 2) * i)
@@ -76,6 +76,7 @@ class Minotaur(pygame.sprite.Sprite):
                         inputs[n] = depth
                         n += 1
                         break
+        
         del pxArray
         return inputs
     
@@ -127,7 +128,13 @@ class Hero(pygame.sprite.Sprite):
         inputs[1] = self.pos[1]
         n = 2
         TARGET_COLOR = 12500670
-
+        finish_position = np.array([finish_line.rect.x, finish_line.rect.y])
+        hero_position = np.array([self.pos[0], self.pos[1]])
+        distance_vector = finish_position - hero_position
+        inputs[n] = distance_vector[0]
+        inputs[n + 1] = distance_vector[1]
+        n += 2
+        
         for i, line in enumerate(self.lines):
             linePos = (self.pos[0] - line.centerAdjust, self.pos[1] - line.centerAdjust)
             cos_val = cos((pi / 2) * i)
