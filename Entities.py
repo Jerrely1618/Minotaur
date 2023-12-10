@@ -1,5 +1,5 @@
 import pygame
-from math import dist,sin,cos,pi
+from math import sqrt,sin,cos,pi
 import numpy as np
         
 DETECTION_POINTS = 4
@@ -10,14 +10,11 @@ TOTAL_INPUTS = DETECTION_POINTS + 4
 
 class Minotaur(pygame.sprite.Sprite):
     def __init__(self,pos) -> None:
-
-        #Loading the sprite
         super().__init__()
         self.image = pygame.image.load('img/Mino.png')
         self.rect = self.image.get_rect(topleft = pos)
         self.direction = pygame.math.Vector2(0,0)
         
-        #Input parameters
         self.pos = pos
         self.initial_pos = pos
         self.lines = []
@@ -25,33 +22,36 @@ class Minotaur(pygame.sprite.Sprite):
             line = detectionLine(center=-10)
             self.lines.append(line)
         
-    def movement(self): #for user mode
+    def movement(self):
         keys = pygame.key.get_pressed()
+        move_right, move_left, move_up, move_down = 0, 0, 0, 0
+
         if keys[pygame.K_RIGHT]:
-            self.direction.x = 1
-            self.direction.y = 0
-        elif keys[pygame.K_LEFT]:
-            self.direction.x = -1
-            self.direction.y = 0
-        elif keys[pygame.K_UP]:
-            self.direction.y = -1
-            self.direction.x = 0
-        elif keys[pygame.K_DOWN]:
-            self.direction.y = 1
-            self.direction.x = 0
-        else: 
-            self.direction.x = 0
-            self.direction.y = 0
+            move_right = 1
+        if keys[pygame.K_LEFT]:
+            move_left = 1
+        if keys[pygame.K_UP]:
+            move_up = 1
+        if keys[pygame.K_DOWN]:
+            move_down = 1
+        if keys[pygame.K_UP] and keys[pygame.K_RIGHT]:
+            move_up = 1
+            move_right = 1
+        self.direction.x = int(move_right) - int(move_left)
+        self.direction.y = int(move_down) - int(move_up)
+
+        if self.direction.x != 0 and self.direction.y != 0:
+            self.direction /= sqrt(2)
+        
 
     def update(self):
         self.movement()
         self.rect.x += self.direction.x
-        self.rect.y += self.direction.y
+        self.rect.y += self.direction.y * 2
 
     def get_inputs(self,surface):
         inputs = np.zeros(TOTAL_INPUTS)
 
-        #Position input
         self.pos = (self.rect.x,self.rect.y)
         inputs[0] = self.pos[0]
         inputs[1] = self.pos[1]
@@ -81,19 +81,16 @@ class Minotaur(pygame.sprite.Sprite):
     
 class Hero(pygame.sprite.Sprite):
     def __init__(self,pos) -> None:
-        
-        #Loading the sprite
         super().__init__()
         self.image = pygame.image.load('img/Hero.png')
         self.rect = self.image.get_rect(topleft = pos)
         self.direction = pygame.math.Vector2(0,0)
         self.Collided = False
-
-        #Input parameters
         self.reward = 0
         self.pos = pos
         self.initial_pos = pos
         self.lines = []
+        
         for i in range(DETECTION_POINTS):
             line = detectionLine(center=-10)
             self.lines.append(line)
@@ -125,13 +122,9 @@ class Hero(pygame.sprite.Sprite):
 
     def get_inputs(self,surface,finish_line):
         inputs = np.zeros(TOTAL_INPUTS)
-
-        #Position input
         self.pos = (self.rect.x,self.rect.y)
         inputs[0] = self.pos[0]
         inputs[1] = self.pos[1]
-
-        #Surrounding inputs
         n = 2
         TARGET_COLOR = 12500670
 
@@ -144,10 +137,8 @@ class Hero(pygame.sprite.Sprite):
                 x = -((depth * cos_val) - linePos[0])
                 y = -((depth * sin_val) - linePos[1])
                 
-                # Create PixelArray outside the loop
                 pxArray = pygame.PixelArray(surface)
 
-                # Cast coordinates to integers for pixel indices
                 x_index, y_index = int(x), int(y)
 
                 if 0 <= x_index < surface.get_width() and 0 <= y_index < surface.get_height():
@@ -156,6 +147,7 @@ class Hero(pygame.sprite.Sprite):
                         inputs[n] = depth
                         n += 1
                         break
+        del pxArray
         return inputs
 
 class detectionLine():

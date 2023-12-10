@@ -35,7 +35,6 @@ class labyrinth(py_environment.PyEnvironment):
                     finish = endPoint((x,y),wallSize)
                     self.finishs.add(finish)
     def observation_spec(self):
-        # Define the observation space
         return array_spec.BoundedArraySpec(shape=(TOTAL_INPUTS,), dtype=np.float32, minimum=0, name='observation')
 
     def action_spec(self):
@@ -43,25 +42,44 @@ class labyrinth(py_environment.PyEnvironment):
 
     def _reset(self):
         self.current_time_step = None
-        self._episode_ended = False
         self.friends.sprite.reset()
         self.start_time = pygame.time.get_ticks()
+        self._episode_ended = False
         return ts.restart(np.array(self._get_observation(), dtype=np.float32))
 
     def _step(self, action):
         if self._episode_ended:
-            return self.reset()
+            return self._reset()
+
         self.friends.sprite.movement(action)
         self.friends.sprite.update()
+
+        collision_reward = 0.0
+        for block in self.walls.sprites():
+            if block.rect.colliderect(self.friends.sprite.rect):
+                collision_reward = -0.1
+                break
+
+        if self.friends.sprite.rect.colliderect(self.finishs.sprite.rect):
+            reward = 1.0
+            self._episode_ended = True
+            return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward)
+
         current_time = pygame.time.get_ticks()
         elapsed_time = current_time - self.start_time
-        if elapsed_time >= 60000:
+        print(f"Elapsed Time: {elapsed_time}")
+
+        if elapsed_time >= 100:
             self._episode_ended = True
-            return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward=0.0)
-        else:
-            return ts.transition(np.array(self._get_observation(), dtype=np.float32), reward=1.0, discount=1.0)
+            reward = -0.5
+            return ts.termination(np.array(self._get_observation(), dtype=np.float32), reward)
+
+        reward = collision_reward
+        return ts.transition(np.array(self._get_observation(), dtype=np.float32), reward, discount=1.0)
+
 
     def _get_observation(self):
+        self.render()
         hero_inputs = self.friends.sprite.get_inputs(self.display_surface, self.finishs.sprite)
         # minotaur_inputs = self.enemies.sprite.get_inputs(self.display_surface)
         return np.array(hero_inputs)
@@ -128,7 +146,7 @@ class endPoint(pygame.sprite.Sprite):
     def __init__(self,pos,size) -> None:
         super().__init__()
         self.image = pygame.Surface((size,size))
-        self.image.fill('yellow')
+        self.image.fill('black')
         self.rect = self.image.get_rect(topleft = pos)
         
 class wall(pygame.sprite.Sprite):
