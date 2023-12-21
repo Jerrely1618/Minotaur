@@ -53,9 +53,9 @@ class MinotaurGame:
                 time_step = next_time_step
                 clock.tick(30)
                 
-            # experience = self.agent.collect_data_spec
+            experience = self.agent.collect_data_spec
             # if (_ + 1) % 5 == 0:
-            #     print(experience)
+            print(experience)
             #     self.agent.train(experience=experience) 
             print(f"Total Episode Reward: {episode_reward}")
         self.agent_handler.save_policy(model_path)
